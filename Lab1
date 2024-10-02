@@ -1,0 +1,181 @@
+from sqlalchemy import create_engine, ForeignKey, Date, Boolean, Integer, Float, String, Column
+from sqlalchemy.orm import sessionmaker, relationship, DeclarativeBase
+from sqlalchemy.ext.associationproxy import association_proxy
+
+# Definir el motor de la base de datos (cambia la URL por la de tu base de datos)
+DATABASE_URL = "sqlite:///mi_base_de_datos.db"
+
+# Crear el motor
+engine = create_engine(DATABASE_URL, echo=True)
+
+# Crear la base de datos si no existe
+Session = sessionmaker(bind=engine)
+session = Session()
+
+# Base para todos los modelos
+class Base(DeclarativeBase):
+    pass
+
+# Definición de los modelos en SQLAlchemy 2.0
+
+# ConfiguracionEmpresa
+class ConfiguracionEmpresa(Base):
+    __tablename__ = 'configuracion_empresa'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    lineas_produccion = Column(Integer, nullable=False)
+    personas_linea = Column(Integer, nullable=False)
+    produccion_linea = Column(Float, nullable=False)
+    horas_trabajo = Column(Float, nullable=False)
+    maximo_extras = Column(Float, nullable=False)
+    costo_contratacion_despido = Column(Float, nullable=False)
+    costo_mantener_inventario = Column(Float, nullable=False)
+    salario_individual = Column(Float, nullable=False)
+    costo_extra = Column(Float, nullable=False)
+
+# Operacion
+class Operacion(Base):
+    __tablename__ = 'operacion'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    codigo = Column(String(20), unique=True, nullable=False)
+    nombre = Column(String(50), nullable=False)
+    tiempo_estandar = Column(Float, nullable=False)
+
+# Producto
+class Producto(Base):
+    __tablename__ = 'producto'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    sku = Column(String(20), unique=True, nullable=False)
+    nombre = Column(String(100), nullable=False)
+    categoria = Column(String(50), nullable=False)
+    cantidad = Column(Float, nullable=False)
+    unidad_medida = Column(String(10), nullable=False)
+    costo = Column(Float, nullable=False)
+    precio = Column(Float, nullable=False)
+    inactivo = Column(Boolean, default=False)
+    fecha_caducidad = Column(Date, nullable=True)
+
+# MateriaPrima
+class MateriaPrima(Base):
+    __tablename__ = 'materia_prima'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    codigo = Column(String(20), unique=True, nullable=False)
+    nombre = Column(String(100), nullable=False)
+    tipo = Column(String(50), nullable=False)
+    unidad_medida = Column(String(10), nullable=False)
+    costo = Column(Float, nullable=False)
+    proveedor_id = Column(Integer, ForeignKey('proveedor.id'))
+    fecha_caducidad = Column(Date, nullable=True)
+
+# Proveedor
+class Proveedor(Base):
+    __tablename__ = 'proveedor'
+    id = Column(String(20), primary_key=True)
+    nombre = Column(String(100), nullable=False)
+    tiempo_entrega = Column(Integer, nullable=False)
+
+# MateriaPrima_Producto (relación many-to-many entre Producto y MateriaPrima)
+class MateriaPrima_Producto(Base):
+    __tablename__ = 'materia_prima_producto'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    producto_id = Column(Integer, ForeignKey('producto.id'), nullable=False)
+    materia_prima_id = Column(Integer, ForeignKey('materia_prima.id'), nullable=False)
+    cantidad_requerida = Column(Float, nullable=False)
+    unidad_medida = Column(String(20), nullable=False)
+    costo_componente = Column(Float, nullable=False)
+    nivel = Column(Integer, nullable=False)
+    fecha_caducidad = Column(Date, nullable=True)
+
+    # Relaciones
+    producto = relationship("Producto", backref="materia_prima_producto")
+    materia_prima = relationship("MateriaPrima", backref="materia_prima_producto")
+
+# BOM (Bill of Materials)
+class BOM(Base):
+    __tablename__ = 'bom'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    producto_id = Column(Integer, ForeignKey('producto.id'), nullable=False)
+    version = Column(Integer, nullable=False)
+    fecha_creacion = Column(Date, nullable=False)
+    fecha_modificacion = Column(Date, nullable=True)
+    activo = Column(Boolean, default=True)
+
+    # Relaciones
+    producto = relationship("Producto", backref="bom")
+    componentes = relationship("MateriaPrima_Producto", backref="bom")
+
+# Cliente
+class Cliente(Base):
+    __tablename__ = 'cliente'
+    id = Column(String(20), primary_key=True)
+    nombre = Column(String(100), nullable=False)
+    tipo = Column(String(50), nullable=False)
+
+# OrdenProduccion
+class OrdenProduccion(Base):
+    __tablename__ = 'orden_produccion'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    producto_id = Column(Integer, ForeignKey('producto.id'), nullable=False)
+    cantidad = Column(Float, nullable=False)
+    fecha_inicio = Column(Date, nullable=True)
+    fecha_fin = Column(Date, nullable=True)
+    estado = Column(String(20), nullable=False)
+
+    # Relaciones
+    producto = relationship("Producto", backref="orden_produccion")
+
+# Demanda
+class Demanda(Base):
+    __tablename__ = 'demanda'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    cliente_id = Column(Integer, ForeignKey('cliente.id'), nullable=False)
+    producto_id = Column(Integer, ForeignKey('producto.id'), nullable=False)
+    periodo = Column(Date, nullable=False)
+    cantidad = Column(Float, nullable=False)
+
+    # Relaciones
+    cliente = relationship("Cliente", backref="demandas")
+    producto = relationship("Producto", backref="demandas")
+
+# InventarioSeguridad
+class InventarioSeguridad(Base):
+    __tablename__ = 'inventario_seguridad'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    item_id = Column(Integer, nullable=False)  # Puede ser Producto o MateriaPrima
+    tipo_item = Column(String(20), nullable=False)  # Producto o MateriaPrima
+    cantidad = Column(Float, nullable=False)
+    unidad_medida = Column(String(10), nullable=False)
+    tiempo_reposicion = Column(Integer, nullable=False)
+    lead_time = Column(Integer, nullable=False)
+    factor_seguridad = Column(Float, nullable=False)
+
+# InventarioActual
+class InventarioActual(Base):
+    __tablename__ = 'inventario_actual'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    item_id = Column(Integer, nullable=False)  # Puede ser Producto o MateriaPrima
+    tipo_item = Column(String(20), nullable=False)  # Producto o MateriaPrima
+    cantidad = Column(Float, nullable=False)
+    unidad_medida = Column(String(10), nullable=False)
+
+# Crear todas las tablas
+Base.metadata.create_all(engine)
+
+# Ejemplo de cómo usar las sesiones para insertar datos
+def crear_configuracion_empresa():
+    nueva_configuracion = ConfiguracionEmpresa(
+        lineas_produccion=3,
+        personas_linea=5,
+        produccion_linea=100.0,
+        horas_trabajo=40.0,
+        maximo_extras=0.1,
+        costo_contratacion_despido=500.0,
+        costo_mantener_inventario=2.0,
+        salario_individual=20.0,
+        costo_extra=30.0
+    )
+    session.add(nueva_configuracion)
+    session.commit()
+
+# Ejecutar el ejemplo
+if __name__ == '__main__':
+    crear_configuracion_empresa()
